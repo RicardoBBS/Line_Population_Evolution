@@ -78,7 +78,7 @@ class Circle:
         self.modifyColor((* average_color,)) #convert list to tuple
         
 
-        # Import an image from directory:
+# Import an image from directory:
 im = Image.open("mona.png")
 
 # Extracting pixel map:
