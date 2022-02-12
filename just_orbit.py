@@ -9,14 +9,6 @@ import gizeh
 from moviepy.editor import *
 
 
-class generalCounter:
-    def __init__(self,count):
-        self.count = count
-    def getCount(self):
-        return self.count
-    def incrementCount(self):
-        self.count += 1
-
 
 #as a matter of orders we will start with one point descending gaussian blur in image
 
@@ -25,7 +17,7 @@ class Node:
     def __init__(self, x, y):
         self.position = [x , y]
         self.history=[]
-        self.radiusofMovement = 100
+        self.radiusofMovement = 200
     
     def decideAndMove(self, im):
         brightnesses = []
@@ -36,8 +28,8 @@ class Node:
             brightnesses.append(self.getProbeBrightness(im, angle))
         chosen = argmin(brightnesses)
         #time to write history, update jump-range, 
-        self.history.append([int(self.position[0]), int(self.position[1])])
-        self.radiusofMovement *= brightnesses[chosen]/256 #the darker the point we move toward, the less we need to move afterwards
+        self.history.append(self.position)
+        self.radiusofMovement *= brightnesses[chosen] #the darker the point we move toward, the less we need to move afterwards
         angle = chosen / division
         self.setPosition(self.getProbePosition(angle))
 
@@ -83,7 +75,7 @@ class Node:
 
 
 # Import an image from directory:
-im = Image.open("aI2.jpeg")
+im = Image.open("aM2.png")
 
 im = im.filter(ImageFilter.GaussianBlur(radius = 30))
 #im.show()
@@ -107,7 +99,7 @@ nodeList=[]
 for i in range (500):
     nodeList.append( Node(random.uniform(0,w),random.uniform(0,h)) )
 
-gc = generalCounter(0)
+
 
 #run simulation
 
@@ -115,6 +107,7 @@ for t in tqdm(range(500)):
     for node in nodeList:
         node.decideAndMove(im)
 
+print(nodeList[0].history)
 
 
 
@@ -122,24 +115,24 @@ print(len(nodeList[0].history))
 
 def make_frame(t):
     circleList = []
-    
+    T = int(min(t*fps, len(nodeList[0].history) - 1))
+    print(t)
     for node in nodeList:
         surface = gizeh.Surface(w, h)
         radius = 3
-        circle = gizeh.circle(radius, xy=(node.history[gc.getCount()][0], node.history[gc.getCount()][1]), fill=(1, 0, 0))
+        circle = gizeh.circle(radius, xy=(node.history[T][0]+ 10 *cos(t), node.history[T][1]+ 20 *sin(t)), fill=(1, 0, 0))
         circleList.append(circle)
     for element in circleList:
         element.draw(surface)
-    if gc.getCount() < len(nodeList[0].history) - 1:
-        gc.incrementCount()
+    
 
     return surface.get_npimage()
 
-
+fps = 12
 duration = 20
 
 clip = VideoClip(make_frame, duration=duration)
-clip.write_gif("3nd_simulation.gif",fps=6,opt="OptimizePlus", fuzz=10)
+clip.write_gif("2nd_simulation.gif",fps=fps)
 
 
 #TODO: figure out how to run simple image sequence

@@ -1,24 +1,39 @@
 from re import X
 from numpy import random
 from math import sqrt
-from PIL import Image
+from PIL import Image, ImageFilter
+from tqdm import tqdm
 
 import gizeh
-import moviepy.editor as mpy
+from moviepy.editor import *
+
+
+
+
+
+
+class generalCounter:
+    def __init__(self,count):
+        self.count = count
+    def getCount(self):
+        return self.count
+    def incrementCount(self):
+        self.count += 1
+
+
 
 
 #General variables to tweak
 # only mass or dt should be needed as they are used only once in a multiplication, their values can be collapsed
 class simSettings:
    def __init__(self):
-      self.neighborRadius = 100
-      self.dt = 0.01
-      self.frame = 0
+      self.neighborRadius = 300
 
 class Node:
    def __init__(self, x, y):
       self.x = x
       self.y = y
+      self.history=[]
       self.charge = 0
       self.appliedForce = [0,0]
       self.neighborList = []
@@ -28,20 +43,10 @@ class Node:
       R,G,B = im.getpixel((self.x, self.y))
       brightness = sum([R,G,B])/3 ##0 is dark (black) and 255 is bright (white)
       self.charge = brightness2ChargeFunction(brightness)
+      
 
       
 
-# Import an image from directory:
-im = Image.open("abstract_masterpiece.png")
-
-im = im.convert ('RGB')
-
-# Extracting pixel map:
-pixel_map = im.load()
-
-# Extracting the width and height
-# of the image:
-width, height = im.size
 
 
 def distance(node1,node2):
@@ -65,7 +70,7 @@ def oneTimeGraphCreation(list, simSettings):
 
 #TODO: make this function also customizable in blender
 def brightness2ChargeFunction(brightness):
-   return (brightness - 255/2)*100
+   return (brightness - 255*7/8)*chargeFactor
 
 
 #not real-world accurate force to deslocation relation but serves its purpose
@@ -74,6 +79,17 @@ def brightness2ChargeFunction(brightness):
 def updateLocation(element):
    x = element.x + element.appliedForce[0]
    y = element.y + element.appliedForce[1]
+   
+   if(x<0):
+      x = 0
+   elif(w<x):
+      x = w -1
+
+   if(y<0):
+      y = 0
+   elif(h<y):
+      y = h -1
+
    return x, y
 
 
@@ -91,9 +107,11 @@ def forceDirection(node1,node2):
    #[x1-x2,y1-y2] normalized, order of subtraction inverted for charges to apply correctly
    x= (node1.x - node2.x)/distance(node1,node2)
    y= (node1.y - node2.y)/distance(node1,node2)
+   
    return x,y
 
-def forceFunction(node1,node2):
+
+def forceVector(node1,node2):
    x,y = forceDirection(node1,node2)
    x *= node1.charge * node2.charge * distanceFunction(node1,node2)
    y *= node1.charge * node2.charge * distanceFunction(node1,node2)
@@ -101,7 +119,10 @@ def forceFunction(node1,node2):
 
 def updateState(list, im):
    for element in list:
+      element.history.append([int(element.x), int(element.y)])
+      #print(element.x, element.y, updateLocation(element))
       element.x, element.y = updateLocation(element)
+      #print(element.x, element.y)
       element.appliedForce = [0,0]
       element.updateCharge(im)
 
@@ -111,10 +132,12 @@ def runPhysicsCycle(list, im):
    updateState(list, im)
    for element in list:
       for neighbor in element.neighborList:
-         element.appliedForce += forceFunction(element,neighbor)
+         x,y=  forceVector(element,neighbor)
+         element.appliedForce[0] += x
+         element.appliedForce[1] += y
 
 
-
+"""
 def neighborOfNeighborGraphUpdate(list, simSettings):
    #alternate implementation would be just testing distances and adding without need
    #for this candidate list, but this would mean checking the same nodes too many times
@@ -155,33 +178,74 @@ def recordPositions(list):
    for element in list:
       record.append([element.x,element.y])
    return record
+   """
 
 
-list = [] 
+
+
+
+
+
+
+# Import an image from directory:
+im = Image.open("abstract_masterpiece.png")
+
+im = im.convert ('RGB')
+
+# Extracting pixel map:
+pixel_map = im.load()
+
+# Extracting the width and height
+# of the image:
+width, height = im.size
+
+
+
+
+
+
+
+
+chargeFactor = 0.5
+
+
+
+
+
+
+gc = generalCounter(0)
+
+
+
+nodeList = [] 
 simSettings = simSettings()
   
 for i in range (500):
-    list.append( Node(random.uniform(0,width),random.uniform(0,height)) )
+    nodeList.append( Node(random.uniform(0,width),random.uniform(0,height)) )
 
-oneTimeGraphCreation(list, simSettings)
-
-frames = []
+oneTimeGraphCreation(nodeList, simSettings)
 
 
-W,H = im.size # width, height, in pixels
-duration = 3 # duration of the clip, in seconds
 
+
+w,h = im.size # width, height, in pixels
+duration = 10 # duration of the clip, in seconds
+iterations = 100
 
 #Runnning simulation
-for forty in range(3):
-   #TODO: make period between neighbor graph update exploration
-   print("\n\n HELLO Bitches", forty)
-   for n in range(40):
-      runPhysicsCycle(list,im)
-      frames.append(recordPositions(list))
-   simSettings.neighborRadius *= 0.6 
-   neighborOfNeighborGraphUpdate(list, simSettings)
-   frames.append(recordPositions(list))
+
+for n in tqdm(range(iterations)):
+
+   im1 = im.filter(ImageFilter.GaussianBlur(radius = (iterations - n)/2))
+   im1 = im.convert ('RGB')
+
+   # Extracting pixel map:
+   pixel_map = im1.load()
+
+
+   runPhysicsCycle(nodeList,im1)
+      
+   
 
 
 
@@ -189,16 +253,22 @@ for forty in range(3):
 
 
 def make_frame(t):
-   circleList = []
-   for node in frames[int(t*15)]:
-      surface = gizeh.Surface(W, H)
-      radius = 3
-      circle = gizeh.circle(radius, xy=(node[0], node[1]), fill=(1, 0, 0))
-      circleList.append(circle)
-   for element in circleList:
-      element.draw(surface)
-   return surface.get_npimage()
+    circleList = []
+    
+    for node in nodeList:
+        surface = gizeh.Surface(w, h)
+        radius = 3
+        circle = gizeh.circle(radius, xy=(node.history[gc.getCount()][0], node.history[gc.getCount()][1]), fill=(1, 0, 0))
+        circleList.append(circle)
+    for element in circleList:
+        element.draw(surface)
+    if gc.getCount() < len(nodeList[0].history) - 1:
+        gc.incrementCount()
 
-clip = mpy.VideoClip(make_frame, duration=duration)
-clip.write_gif("2nd_simulation.gif",fps=15, opt="OptimizePlus", fuzz=10)
+    return surface.get_npimage()
 
+
+duration = 20
+
+clip = VideoClip(make_frame, duration=duration)
+clip.write_gif("6nd_simulation.gif",fps=6,opt="OptimizePlus", fuzz=10)
